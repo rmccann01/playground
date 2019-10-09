@@ -8,6 +8,10 @@ from . import BaseAgent
 from .. import constants
 from .. import utility
 
+# pom_battle --agents=test::agents.SimpleAgent,test:
+# :agents.SimpleAgent,test::agents.SimpleAgent,test::agents.NewAgent --config=PommeFFACompetition-v0 --re
+# nderpom_battle --agents=test::agents.SimpleAgent,test:
+
 
 class NewAgent(BaseAgent):
     """This is a baseline agent. After you can beat it, submit your agent to
