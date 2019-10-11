@@ -52,25 +52,36 @@ class NewAgent(BaseAgent):
         blast_strength = int(obs['blast_strength'])
         items, dist, prev = self._djikstra(
             board, my_position, bombs, enemies, depth=10)
+        
+  
 
         # Move if we are in an unsafe place.
         unsafe_directions = self._directions_in_range_of_bomb(
             board, my_position, bombs, dist)
         if unsafe_directions:
             self.planned_actions = []
-            directions = self._find_safe_directions(
+
+            PossDirections = self._find_safe_directions(
                 board, my_position, unsafe_directions, bombs, enemies)
-            return random.choice(directions).value
+            
+            ClosestEnemyPos = self._near_enemy(my_position, items, dist, prev, enemies, 5)
+
+            for Possdirect in PossDirections:
+                if Possdirect == ClosestEnemyPos:
+                    self.planned_actions.append(ClosestEnemyPos.value)
+                else:
+                    self.planned_actions.append(random.choice(PossDirections).value)
+
 
         # Lay pomme if we are adjacent to an enemy.
         if self._is_adjacent_enemy(items, dist, enemies) and self._maybe_bomb(
                 ammo, blast_strength, items, dist, my_position):
-            return constants.Action.Bomb.value
+            self.planned_actions.append(constants.Action.Bomb.value)
 
         # Lay pomme if near an enemy (within blast strength spaces)
         if self._is_near_enemy(items, dist, enemies, blast_strength+1) and self._maybe_bomb(
                 ammo, blast_strength, items, dist, my_position):
-            return constants.Action.Bomb.value
+            self.planned_actions.append(constants.Action.Bomb.value)
 
         # Move towards a good item always
         direction = self._near_good_powerup(my_position, items, dist, prev, 11)
@@ -109,8 +120,11 @@ class NewAgent(BaseAgent):
                 return directions[0].value'''
 
         if(self.planned_actions):
+
             action = self.planned_actions[0]
             self.planned_actions = self.planned_actions[1:]
+            print (action)
+            print (self.planned_actions)
             return action
 
         # if no plan choose a random but valid direction.
