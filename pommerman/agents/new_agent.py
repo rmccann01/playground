@@ -8,10 +8,6 @@ from . import BaseAgent
 from .. import constants
 from .. import utility
 
-# pom_battle --agents=test::agents.SimpleAgent,test:
-# :agents.SimpleAgent,test::agents.SimpleAgent,test::agents.NewAgent --config=PommeFFACompetition-v0 --re
-# nderpom_battle --agents=test::agents.SimpleAgent,test:
-
 
 class NewAgent(BaseAgent):
     """This is a baseline agent. After you can beat it, submit your agent to
@@ -54,10 +50,7 @@ class NewAgent(BaseAgent):
         items, dist, prev = self._djikstra(
             board, my_position, bombs, enemies, depth=10)
         
-<<<<<<< HEAD
   
-=======
->>>>>>> ea905ee035c216a1e213825b070fd0c32a4da7db
 
         # Move if we are in an unsafe place.
         unsafe_directions = self._directions_in_range_of_bomb(
