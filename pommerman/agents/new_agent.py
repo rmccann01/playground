@@ -44,14 +44,16 @@ class NewAgent(BaseAgent):
                 })
             return ret
 
-        my_position = tuple(obs['position'])
+        
         board = np.array(obs['board'])
         bombs = convert_bombs(np.array(obs['bomb_blast_strength']))
         enemies = [constants.Item(e) for e in obs['enemies']]
         ammo = int(obs['ammo'])
         blast_strength = int(obs['blast_strength'])
+        my_position, self.planned_actions = self.update_pos_plan(self, tuple(obs['position']), self.planned_actions, board, bombs, enemies)
         items, dist, prev = self._djikstra(
             board, my_position, bombs, enemies, depth=10)
+        
 
         # Move if we are in an unsafe place.
         unsafe_directions = self._directions_in_range_of_bomb(
@@ -135,6 +137,26 @@ class NewAgent(BaseAgent):
             -self._recently_visited_length:]
 
         return random.choice(directions).value
+
+    @staticmethod
+    def update_pos_plan(cls, my_position, plan, board, bombs, enemies):
+        plan_index = 0
+        for action in plan:
+            items, dist, prev = cls._djikstra(
+            board, my_position, bombs, enemies, depth=10)
+            if(cls._directions_in_range_of_bomb(
+            board, my_position, bombs, dist)):
+                plan = plan[:plan_index]
+            plan_index+=1
+            if(action == constants.Action.Up):
+                my_position[1] -= 1
+            elif(action == constants.Action.Down):
+                my_position[1] += 1
+            elif(action == constants.Action.Right):
+                my_position[0] += 1
+            elif(action == constants.Action.Left):
+                my_position[0] -= 1
+        return my_position, plan
 
     @staticmethod
     def _djikstra(board, my_position, bombs, enemies, depth=None, exclude=None):
