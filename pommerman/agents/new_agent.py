@@ -8,10 +8,6 @@ from . import BaseAgent
 from .. import constants
 from .. import utility
 
-# pom_battle --agents=test::agents.SimpleAgent,test:
-# :agents.SimpleAgent,test::agents.SimpleAgent,test::agents.NewAgent --config=PommeFFACompetition-v0 --re
-# nderpom_battle --agents=test::agents.SimpleAgent,test:
-
 
 class NewAgent(BaseAgent):
     """This is a baseline agent. After you can beat it, submit your agent to
@@ -59,11 +55,19 @@ class NewAgent(BaseAgent):
         unsafe_directions = self._directions_in_range_of_bomb(
             board, my_position, bombs, dist)
         if unsafe_directions:
-            #self.planned_actions = []
-            directions = self._find_safe_directions(
+            self.planned_actions = []
+
+            PossDirections = self._find_safe_directions(
                 board, my_position, unsafe_directions, bombs, enemies)
-            no_move = False
-            self.planned_actions.append(random.choice(directions).value)
+            
+            ClosestEnemyPos = self._near_enemy(my_position, items, dist, prev, enemies, 5)
+
+            for Possdirect in PossDirections:
+                if Possdirect == ClosestEnemyPos:
+                    self.planned_actions.append(ClosestEnemyPos.value)
+                else:
+                    self.planned_actions.append(random.choice(PossDirections).value)
+
 
         # Lay pomme if we are adjacent to an enemy.
         if self._is_adjacent_enemy(items, dist, enemies) and self._maybe_bomb(
@@ -131,6 +135,7 @@ class NewAgent(BaseAgent):
         action = self.planned_actions[0]
         self.planned_actions = self.planned_actions[1:]
         return action
+
 
     @staticmethod
     def update_pos_plan(cls, my_position, plan, board, bombs, enemies):
