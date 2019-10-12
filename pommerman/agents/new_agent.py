@@ -44,7 +44,8 @@ class NewAgent(BaseAgent):
                 })
             return ret
 
-        
+        #while(len(self.planned_actions) < self.planned_actions_length):
+        no_move = True
         board = np.array(obs['board'])
         bombs = convert_bombs(np.array(obs['bomb_blast_strength']))
         enemies = [constants.Item(e) for e in obs['enemies']]
@@ -52,27 +53,29 @@ class NewAgent(BaseAgent):
         blast_strength = int(obs['blast_strength'])
         my_position, self.planned_actions = self.update_pos_plan(self, tuple(obs['position']), self.planned_actions, board, bombs, enemies)
         items, dist, prev = self._djikstra(
-            board, my_position, bombs, enemies, depth=10)
-        
+            board, my_position, bombs, enemies, depth=10)        
 
         # Move if we are in an unsafe place.
         unsafe_directions = self._directions_in_range_of_bomb(
             board, my_position, bombs, dist)
         if unsafe_directions:
-            self.planned_actions = []
+            #self.planned_actions = []
             directions = self._find_safe_directions(
                 board, my_position, unsafe_directions, bombs, enemies)
-            return random.choice(directions).value
+            no_move = False
+            self.planned_actions.append(random.choice(directions).value)
 
         # Lay pomme if we are adjacent to an enemy.
         if self._is_adjacent_enemy(items, dist, enemies) and self._maybe_bomb(
                 ammo, blast_strength, items, dist, my_position):
-            return constants.Action.Bomb.value
+            no_move = False
+            self.planned_actions.append(constants.Action.Bomb.value)
 
         # Lay pomme if near an enemy (within blast strength spaces)
         if self._is_near_enemy(items, dist, enemies, blast_strength+1) and self._maybe_bomb(
                 ammo, blast_strength, items, dist, my_position):
-            return constants.Action.Bomb.value
+            no_move = False
+            self.planned_actions.append(constants.Action.Bomb.value)
 
         # Move towards a good item always
         direction = self._near_good_powerup(my_position, items, dist, prev, 11)
@@ -81,62 +84,53 @@ class NewAgent(BaseAgent):
             constants.Item.Kick
         ], items, 11)
         if direction is not None:
+            no_move = False
             self.planned_actions.append(direction.value)
-        #if direction is not None:
-            #return direction.value
 
         # Move towards an enemy if there is one in exactly three reachable spaces.
         direction = self._near_enemy(my_position, items, dist, prev, enemies, 3)
         if direction is not None and (self._prev_direction != direction or
-                                      random.random() < .25):
+                                    random.random() < .25):
             self._prev_direction = direction
+            no_move = False
             self.planned_actions.append(direction.value)
-            #return direction.value
 
         # Maybe lay a bomb if we are within a space of a wooden wall.
         if self._near_wood(my_position, items, dist, prev, 1):
             if self._maybe_bomb(ammo, blast_strength, items, dist, my_position):
-                #return constants.Action.Bomb.value
+                no_move = False
                 self.planned_actions.append(constants.Action.Bomb.value)
             else:
-                #return constants.Action.Stop.value
+                no_move = False
                 self.planned_actions.append(constants.Action.Stop.value)
 
-        # Move towards a wooden wall if there is one within two reachable spaces and you have a bomb.
-        '''direction = self._near_wood(my_position, items, dist, prev, 2)
-        if direction is not None:
+        if(no_move):
+            # if no plan choose a random but valid direction.
+            directions = [
+                constants.Action.Stop, constants.Action.Left,
+                constants.Action.Right, constants.Action.Up, constants.Action.Down
+            ]
+            valid_directions = self._filter_invalid_directions(
+                board, my_position, directions, enemies)
             directions = self._filter_unsafe_directions(board, my_position,
-                                                        [direction], bombs)
-            if directions:
-                return directions[0].value'''
+                                                        valid_directions, bombs)
+            directions = self._filter_recently_visited(
+                directions, my_position, self._recently_visited_positions)
+            if len(directions) > 1:
+                directions = [k for k in directions if k != constants.Action.Stop]
+            if not len(directions):
+                directions = [constants.Action.Stop]
 
-        if(self.planned_actions):
-            action = self.planned_actions[0]
-            self.planned_actions = self.planned_actions[1:]
-            return action
+            # Add this position to the recently visited uninteresting positions so we don't return immediately.
+            self._recently_visited_positions.append(my_position)
+            self._recently_visited_positions = self._recently_visited_positions[
+                -self._recently_visited_length:]
 
-        # if no plan choose a random but valid direction.
-        directions = [
-            constants.Action.Stop, constants.Action.Left,
-            constants.Action.Right, constants.Action.Up, constants.Action.Down
-        ]
-        valid_directions = self._filter_invalid_directions(
-            board, my_position, directions, enemies)
-        directions = self._filter_unsafe_directions(board, my_position,
-                                                    valid_directions, bombs)
-        directions = self._filter_recently_visited(
-            directions, my_position, self._recently_visited_positions)
-        if len(directions) > 1:
-            directions = [k for k in directions if k != constants.Action.Stop]
-        if not len(directions):
-            directions = [constants.Action.Stop]
-
-        # Add this position to the recently visited uninteresting positions so we don't return immediately.
-        self._recently_visited_positions.append(my_position)
-        self._recently_visited_positions = self._recently_visited_positions[
-            -self._recently_visited_length:]
-
-        return random.choice(directions).value
+            self.planned_actions.append(random.choice(directions).value)
+ 
+        action = self.planned_actions[0]
+        self.planned_actions = self.planned_actions[1:]
+        return action
 
     @staticmethod
     def update_pos_plan(cls, my_position, plan, board, bombs, enemies):
@@ -148,14 +142,18 @@ class NewAgent(BaseAgent):
             board, my_position, bombs, dist)):
                 plan = plan[:plan_index]
             plan_index+=1
-            if(action == constants.Action.Up):
-                my_position[1] -= 1
-            elif(action == constants.Action.Down):
-                my_position[1] += 1
-            elif(action == constants.Action.Right):
-                my_position[0] += 1
-            elif(action == constants.Action.Left):
-                my_position[0] -= 1
+            if(action == constants.Action.Up.value):
+                new_pos = list(my_position)[1] - 1
+                my_position = tuple([my_position[0], new_pos])
+            elif(action == constants.Action.Down.value):
+                new_pos = list(my_position)[1] + 1
+                my_position = tuple([my_position[0], new_pos])
+            elif(action == constants.Action.Right.value):
+                new_pos = list(my_position)[0] + 1
+                my_position = tuple([new_pos, my_position[1]])
+            elif(action == constants.Action.Left.value):
+                new_pos = list(my_position)[0] - 1
+                my_position = tuple([new_pos, my_position[1]])
         return my_position, plan
 
     @staticmethod
@@ -434,6 +432,8 @@ class NewAgent(BaseAgent):
         next_position = position
         while prev[next_position] != my_position:
             next_position = prev[next_position]
+            if not next_position:
+                return None
 
         return utility.get_direction(my_position, next_position)
 
