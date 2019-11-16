@@ -28,8 +28,11 @@ class NewAgentTeam(BaseAgent):
         self.planned_actions = []
         self.planned_actions_length = 6
         #messages from teammate
-        self.saved_messages = [(0,0),(0,0),(0,0),(0,0),(0,0),(0,0)]
+        self.saved_messages = [(0, 0), (0, 0), (0, 0), (0, 0), (0, 0), (0, 0)]
         self.saved_messages_length = 6
+        self.leader = False
+        self.enemy_pos = []
+        self.last_e_pos = (-1,-1)
 
     def act(self, obs, action_space):
         def convert_bombs(bomb_map):
@@ -43,7 +46,6 @@ class NewAgentTeam(BaseAgent):
                 })
             return ret
 
-        #while(len(self.planned_actions) < self.planned_actions_length):
         no_move = True
         board = np.array(obs['board'])
         bombs = convert_bombs(np.array(obs['bomb_blast_strength']))
@@ -71,6 +73,18 @@ class NewAgentTeam(BaseAgent):
                 else:
                     self.planned_actions.append(random.choice(PossDirections).value)
 
+        in_msg1 = obs['message'][0]
+        in_msg2 = obs['message'][1]
+
+        if type(in_msg1) == type("") and in_msg1.split(',')[0] != '-1':
+            self.last_e_pos = (int(in_msg1.split(',')[0]),int(in_msg1.split(',')[1]))
+        if type(in_msg2) == type("") and in_msg2.split(',')[0] != '-1':
+            self.last_e_pos = (int(in_msg2.split(',')[0]),int(in_msg2.split(',')[1]))
+
+        if(self.last_e_pos != (-1,-1)):
+            next_dir = self._get_direction_towards_position(my_position, self.last_e_pos, prev)
+            if next_dir is not None:
+                self.planned_actions.append(next_dir)
 
         # Lay pomme if we are adjacent to an enemy.
         if self._is_adjacent_enemy(items, dist, enemies) and self._maybe_bomb(
@@ -138,24 +152,11 @@ class NewAgentTeam(BaseAgent):
         action = self.planned_actions[0]
         self.planned_actions = self.planned_actions[1:]
 
-        message1 = 8
-        message2 = message1
+        self.enemy_pos = self._all_enemy_positions(enemies, obs)
 
-        self.saved_messages = [obs['message']]+self.saved_messages[0:self.saved_messages_length-1]
-        if(self.saved_messages[0] == (8,8)):
-            print("Message Sent: "+str(self.saved_messages))
-            message1 = 2
-            message2 = message1
-        elif(self.saved_messages[0] == (1,1)):
-            print("Message Confirmed: "+str(self.saved_messages))
-            message1 = 8
-            message2 = message1
-        elif(self.saved_messages[0] == (2,2)):
-            print("Message Received: "+str(self.saved_messages))
-            message1 = 1
-            message2 = message1
+        message1 = str(self.enemy_pos[0][0])+','+str(self.enemy_pos[0][1])
+        message2 = str(self.enemy_pos[1][0])+','+str(self.enemy_pos[1][1])
 
-        
         return (action,message1,message2)
 
 
@@ -168,7 +169,7 @@ class NewAgentTeam(BaseAgent):
             if(cls._directions_in_range_of_bomb(
             board, my_position, bombs, dist)):
                 plan = plan[:plan_index]
-            plan_index+=1
+            plan_index += 1
             if(action == constants.Action.Up.value):
                 new_pos = list(my_position)[1] - 1
                 my_position = tuple([my_position[0], new_pos])
@@ -405,6 +406,14 @@ class NewAgentTeam(BaseAgent):
         return False
 
     @staticmethod
+    def _enemy_in_range(items, dist, enemies, radius = 9):
+        for enemy in enemies:
+            for position in items.get(enemy, []):
+                if dist[position] <= radius:
+                    return True
+        return False
+
+    @staticmethod
     def _has_bomb(obs):
         return obs['ammo'] >= 1
 
@@ -457,12 +466,29 @@ class NewAgentTeam(BaseAgent):
             return None
 
         next_position = position
-        while prev[next_position] != my_position:
-            next_position = prev[next_position]
-            if not next_position:
-                return None
+        if next_position in prev.keys():
+            while prev[next_position] != my_position:
+                next_position = prev[next_position]
+                if not next_position:
+                    return None
+        else:
+            return None
 
         return utility.get_direction(my_position, next_position)
+
+    @classmethod
+    def _all_enemy_positions(cls, enemies, obs):
+        enemy_pos = []
+        for e in enemies:
+            if(e.value == 9):
+                continue
+            coords = np.where(obs['board'] == e.value)
+            if(len(coords) == 2 and coords[0] and coords[1]):
+                enemy_pos += zip(coords[1],coords[0])
+            else:
+                enemy_pos += [(-1, -1)]
+        return enemy_pos
+
 
     @classmethod
     def _near_enemy(cls, my_position, items, dist, prev, enemies, radius):
